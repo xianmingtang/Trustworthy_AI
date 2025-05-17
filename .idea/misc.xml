@@ -3,5 +3,8 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.13 (Py_Projects)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (Py_Projects)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="$PROJECT_DIR$/.conda_env" project-jdk-type="Python SDK" />
+  <component name="PythonCompatibilityInspectionAdvertiser">
+    <option name="version" value="3" />
+  </component>
 </project>

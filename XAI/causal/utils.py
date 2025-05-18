@@ -26,8 +26,6 @@ def cholesky(A, sparse=True, verbose=False):
         jitter = np.eye(A.shape[0]) * np.abs(np.mean(np.diag(A))) * 1e-8
         return cholesky(A + jitter, sparse=False, verbose=verbose)
 
-
-
 def batch_pairs_to_dataframe(vars_list, func):
     """
     For each unordered pair (x, y) in vars_list, call func(x, y) and collect the outputs in a DataFrame.
@@ -48,7 +46,6 @@ def batch_pairs_to_dataframe(vars_list, func):
         })
     return pd.DataFrame(rows)
 
-
 def make_graph(adjacency_matrix, labels=None):
     idx = np.abs(adjacency_matrix) > 0.01
     dirs = np.where(idx)
@@ -59,7 +56,6 @@ def make_graph(adjacency_matrix, labels=None):
     for to, from_, coef in zip(dirs[0], dirs[1], adjacency_matrix[idx]):
         d.edge(names[from_], names[to], label=str(coef))
     return d
-
 
 def str_to_dot(string):
     '''

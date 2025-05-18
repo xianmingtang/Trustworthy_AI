@@ -7,6 +7,9 @@ import dowhy, networkx as nx, dowhy.gcm as gcm
     Using python package dowhy
 """
 
+def causal_identify(causal_result, causal_target):
+    return None
+
 def backdoor():
     return None
 

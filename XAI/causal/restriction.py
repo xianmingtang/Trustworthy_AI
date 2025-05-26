@@ -7,6 +7,7 @@
 from causallearn.utils.PCUtils.BackgroundKnowledge import BackgroundKnowledge
 from causallearn.graph.GraphNode import GraphNode
 import pandas as pd
+import numpy as np
 
 
 bk = BackgroundKnowledge()
@@ -38,3 +39,17 @@ def PC_BGKnowledge(
         bk.add_forbidden_by_node(cls_node, node_table[feat])
     print(type(bk))
     return bk
+
+def DirectLiNGAM_BGKnowledge(
+        features: list,
+        target: str) -> pd.DataFrame:
+
+    name_to_idx = {name: idx for idx, name in enumerate(features)}
+    p = len(features)
+
+    Aknw = np.zeros((p, p), dtype=int)  # 0 = unspecified
+    class_idx = name_to_idx[target]
+    Aknw[class_idx, :] = -1  # forbid outgoing from class
+    Aknw[class_idx, class_idx] = 0
+
+    return Aknw

@@ -9,9 +9,6 @@ from causallearn.graph.GraphNode import GraphNode
 import pandas as pd
 import numpy as np
 
-
-bk = BackgroundKnowledge()
-
 def PC_BGKnowledge(
         df: pd.DataFrame,
         features: pd.DataFrame,
@@ -30,6 +27,7 @@ def PC_BGKnowledge(
     Returns:
         background knowledge
     """
+    bk = BackgroundKnowledge()
     node_table = {}
     for name in df.columns:
         n = GraphNode(name)
@@ -58,10 +56,8 @@ def DirectLiNGAM_BGKnowledge(
 
     name_to_idx = {name: idx for idx, name in enumerate(features)}
     p = len(features)
-
     bk = np.zeros((p, p), dtype=int)  # 0 = unspecified
     class_idx = name_to_idx[target]
     bk[class_idx, :] = -1  # forbid outgoing from class
     bk[class_idx, class_idx] = 0
-
     return bk

@@ -28,7 +28,7 @@ def PC_BGKnowledge(
         target: label of target node
 
     Returns:
-        No return
+        background knowledge
     """
     node_table = {}
     for name in df.columns:
@@ -43,13 +43,25 @@ def PC_BGKnowledge(
 def DirectLiNGAM_BGKnowledge(
         features: list,
         target: str) -> pd.DataFrame:
+    """
+        Background knowledge based on DirectLiNGAM algorithm.
+
+        Y is a target, must be a child node, the final causal graph must be X->Y or X->Z->Y, cannot be Y->Z
+
+        Args:
+            features: list of features.
+            target: label of target node.
+
+        Returns:
+            9*9 matrix background knowledge
+        """
 
     name_to_idx = {name: idx for idx, name in enumerate(features)}
     p = len(features)
 
-    Aknw = np.zeros((p, p), dtype=int)  # 0 = unspecified
+    bk = np.zeros((p, p), dtype=int)  # 0 = unspecified
     class_idx = name_to_idx[target]
-    Aknw[class_idx, :] = -1  # forbid outgoing from class
-    Aknw[class_idx, class_idx] = 0
+    bk[class_idx, :] = -1  # forbid outgoing from class
+    bk[class_idx, class_idx] = 0
 
-    return Aknw
+    return bk

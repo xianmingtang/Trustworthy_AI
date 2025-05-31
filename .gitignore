@@ -41,3 +41,6 @@ dist/
 *.class
 target/
 bin/
+/XAI/dowhy_book/chapter2.pdf
+/XAI/dowhy_book/chapter3.pdf
+/XAI/dowhy_book/chapter4.pdf

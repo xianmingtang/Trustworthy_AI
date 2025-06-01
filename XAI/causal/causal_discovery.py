@@ -52,7 +52,7 @@ def fci_algorithm(
     )
     return g, edges
 
-def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
+def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
     """Solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
 
     Args:

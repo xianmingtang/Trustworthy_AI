@@ -51,7 +51,7 @@ def causal_refuter(
             estimate,
             num_simulations=200,
             random_seed=42,
-            treatment_names=['pos'],
+            # treatment_names=['pos'],
             n_jobs=-1,
             method_name=method_name
         )

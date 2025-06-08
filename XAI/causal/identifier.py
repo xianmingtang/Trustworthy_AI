@@ -1,8 +1,8 @@
-import statsmodels.api as sm
 from dowhy import CausalModel
 from causal import utils
 import pandas as pd
-
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Define Causal Model
 
@@ -41,17 +41,17 @@ def estimate(
     estimand = model.identify_effect(proceed_when_unidentifiable=False)
 
     # Method
-    method_name = 'backdoor.generalized_linear_model'
+    method_backdoor_linearModel = 'backdoor.generalized_linear_model'
 
     # Estimation
     estimate = model.estimate_effect(
         estimand,
         method_params=method_params,
-        method_name=method_name,
+        method_name=method_backdoor_linearModel,
         confidence_intervals=confidence_intervals,
         test_significance=test_significance,
         target_units=target_units
     )
 
 
-    return estimand, estimate
+    return model, estimand, estimate

@@ -5,6 +5,8 @@ import warnings
 import itertools
 import pandas as pd
 import graphviz
+from sklearn.model_selection import train_test_split
+
 
 
 def cholesky(A, sparse=True, verbose=False):
@@ -64,3 +66,47 @@ def str_to_dot(string):
     graph = string.strip().replace('\n', ';').replace('\t','')
     graph = graph[:9] + graph[10:-2] + graph[-1] # Removing unnecessary characters from string
     return graph
+
+def collapse_classes(df: pd.DataFrame,
+                     new_val: int,
+                     class_col: str = "class",
+                     keep_val: int = 0,
+                     inplace: bool = False) -> pd.DataFrame:
+    """
+    combined other class values with a new value.
+
+    Example: original column class = [0, 11, 12, 13, 14, 15] keep value = 0, new val = 1 -> class = [0, 1]
+
+    :param df: pd.DataFrame
+    :param new_val: new int values
+    :param class_col: which column to collapse
+    :param keep_val: class value to keep.
+    :return: pandas DataFrame
+    """
+
+    if not inplace:
+        _df = df.copy()
+
+    mask = _df[class_col]!= keep_val
+
+    if not mask.any():
+        return _df
+
+    _df.loc[mask, class_col] = new_val
+    return _df
+
+def min_sample_retention(df: pd.DataFrame,
+                         test_size: int,
+                         random_state: int
+                         )-> pd.DataFrame:
+    _df = df.copy()
+    _test_size = test_size
+    _random_state = random_state
+
+    _, sample = train_test_split(_df,
+                                 test_size=_test_size,
+                                 stratify=_df['class'],
+                                 shuffle=True,
+                                 random_state=_random_state)
+
+    return sample

@@ -163,6 +163,8 @@ def boss(
     """
     Perform a best order score search (BOSS) algorithm
 
+    node_names: ['sendTime', 'senderPseudo', 'messageID', 'pos', 'spd', 'acl', 'hed', 'class']
+
     Parameters
     ----------
     X : data set (numpy ndarray), shape (n_samples, n_features). The input data, where n_samples is the number of samples and n_features is the number of features.
@@ -263,14 +265,40 @@ def boss(
     runtime = time.perf_counter()
 
     order = [v for v in range(p)]
+    print(f'order:{order}')
+    leaf_idx = node_names.index("class")
+    print(f'leaf_idx:{leaf_idx}')
 
     gsts = [GST(v, score) for v in order]
+    print(f'gsts:{gsts}')
+
+    # New >>> Added forbidden node to gst, class will not be a parent node to any others nodes.
+    for gst in gsts:
+        if gst.vertex != leaf_idx:
+            gst.forbidden.append(leaf_idx)
+    for i, gst in enumerate(gsts):
+        print(f"=== GST #{i} ===")
+        print("vertex        :", gst.vertex)
+        print("forbidden     :", gst.forbidden)
+        print("required      :", gst.required)
+        print("root.grow_score :", gst.root.grow_score)
+        print("root.shrink_score:", gst.root.shrink_score)
+    # New <<<
+
     parents = {v: [] for v in order}
+    print(f'parents:{parents}')
 
     variables = [v for v in order]
+
+    # New >>> never
+    # variables = [v for v in order if v != leaf_idx]
+    # print(variables)
+    # New <<<
+
     while True:
         improved = False
         random.shuffle(variables)
+        print(variables)
         if verbose:
             for i, v in enumerate(order):
                 parents[v].clear()

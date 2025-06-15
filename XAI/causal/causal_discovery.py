@@ -155,7 +155,7 @@ def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+1
 
 def boss(
         X: np.ndarray,
-        score_func: str = "local_score_BIC_from_cov",
+        score_func: str = "local_score_marginal_general",
         parameters: Optional[Dict[str, Any]] = None,
         verbose: Optional[bool] = True,
         node_names: Optional[List[str]] = None,

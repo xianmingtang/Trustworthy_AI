@@ -11,6 +11,7 @@ def estimate(
         treatment: str,
         outcome: str,
         method_params: dict,
+        method_name: str,
         graph: str,
         confidence_intervals: bool = True,
         target_units: str = 'ate',
@@ -40,14 +41,11 @@ def estimate(
     # Identification
     estimand = model.identify_effect(proceed_when_unidentifiable=False)
 
-    # Method
-    method_backdoor_linearModel = 'backdoor.generalized_linear_model'
-
     # Estimation
     estimate = model.estimate_effect(
         estimand,
         method_params=method_params,
-        method_name=method_backdoor_linearModel,
+        method_name=method_name,
         confidence_intervals=confidence_intervals,
         test_significance=test_significance,
         target_units=target_units

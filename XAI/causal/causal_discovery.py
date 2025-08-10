@@ -129,6 +129,11 @@ def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+1
         g_obj = np.concatenate((G_smooth + lambda1, - G_smooth + lambda1), axis=None)
         return obj, g_obj
 
+    def _enforce_leafnode(W, u):
+        W2 = W.copy()
+        W2[:, u] = 0.0
+        return W2
+
     n, d = X.shape
     w_est, rho, alpha, h = np.zeros(2 * d * d), 1.0, 0.0, np.inf  # double w_est into (w_pos, w_neg)
     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)]
@@ -150,6 +155,8 @@ def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+1
             break
     W_est = _adj(w_est)
     W_est[np.abs(W_est) < w_threshold] = 0
+    # W_est[7, :] = 0.0
+    W_est = _enforce_leafnode(W_est, 7)
     return W_est
 
 
@@ -272,7 +279,7 @@ def boss(
     gsts = [GST(v, score) for v in order]
     print(f'gsts:{gsts}')
 
-    # New >>> Added forbidden node to gst, class will not be a parent node to any others nodes.
+    # New >>> Added forbidden node to gst, class will not be a parent node to any other nodes.
     for gst in gsts:
         if gst.vertex != leaf_idx:
             gst.forbidden.append(leaf_idx)
@@ -365,3 +372,106 @@ def better_mutation(v, order, gsts):
     order.insert(best - int(best > i), v)
 
     return True
+
+# New NOTEARS Algorithm
+
+# def notears_linear(X, lambda1, loss_type, leaf_nodes, max_iter=500, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
+#     """
+#     solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
+#
+#     Args:
+#         X (np.ndarray): [n, d] sample matrix
+#         lambda1 (float): l1 penalty parameter
+#         loss_type (str): l2, logistic, poisson
+#         max_iter (int): max num of dual ascent steps
+#         h_tol (float): exit if |h(w_est)| <= htol
+#         rho_max (float): exit if rho >= rho_max
+#         w_threshold (float): drop edge if |weight| < threshold
+#
+#     Returns:
+#         W_est (np.ndarray): [d, d] estimated DAG
+#     """
+#     def _loss(W):
+#         """Evaluate value and gradient of loss."""
+#         M = X @ W
+#         if loss_type == 'l2':
+#             R = X - M
+#             loss = 0.5 / X.shape[0] * (R ** 2).sum()
+#             G_loss = - 1.0 / X.shape[0] * X.T @ R
+#         elif loss_type == 'logistic':
+#             loss = 1.0 / X.shape[0] * (np.logaddexp(0, M) - X * M).sum()
+#             G_loss = 1.0 / X.shape[0] * X.T @ (sigmoid(M) - X)
+#         elif loss_type == 'poisson':
+#             S = np.exp(M)
+#             loss = 1.0 / X.shape[0] * (S - X * M).sum()
+#             G_loss = 1.0 / X.shape[0] * X.T @ (S - X)
+#         else:
+#             raise ValueError('unknown loss type')
+#         return loss, G_loss
+#
+#     def _h(W):
+#         """Evaluate value and gradient of acyclicity constraint."""
+#         E = slin.expm(W * W)  # (Zheng et al. 2018)
+#         h = np.trace(E) - d
+#         #     # A different formulation, slightly faster at the cost of numerical stability
+#         #     M = np.eye(d) + W * W / d  # (Yu et al. 2019)
+#         #     E = np.linalg.matrix_power(M, d - 1)
+#         #     h = (E.T * M).sum() - d
+#         G_h = E.T * W * 2
+#         return h, G_h
+#
+#     def _adj(w):
+#         """Convert doubled variables ([2 d^2] array) back to original variables ([d, d] matrix)."""
+#         return (w[:d * d] - w[d * d:]).reshape([d, d])
+#
+#     def _func(w):
+#         """Evaluate value and gradient of augmented Lagrangian for doubled variables ([2 d^2] array)."""
+#         W = _adj(w)
+#         loss, G_loss = _loss(W)
+#         h, G_h = _h(W)
+#         obj = loss + 0.5 * rho * h * h + alpha * h + lambda1 * w.sum()
+#         G_smooth = G_loss + (rho * h + alpha) * G_h
+#         g_obj = np.concatenate((G_smooth + lambda1, - G_smooth + lambda1), axis=None)
+#         return obj, g_obj
+#
+#     n, d = X.shape
+#     if loss_type == 'l2':
+#         X = X - np.mean(X, axis=0, keepdims=True)
+#
+#     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)]
+#
+#     if leaf_nodes is not None:
+#         if isinstance(leaf_nodes, int):
+#             leaf_nodes = [leaf_nodes]
+#     #     for u in leaf_nodes:
+#     #         for j in range(d):
+#     #             if j == u:
+#     #                 continue
+#     #             idx = u * d + j
+#     #             bnds[idx] = (0, 0)
+#     #             bnds[d * d + idx] = (0, 0)
+#
+#     w_est, rho, alpha, h = np.zeros(2 * d * d), 1.0, 0.0, np.inf  # double w_est into (w_pos, w_neg)
+#
+#     for _ in range(max_iter):
+#         w_new, h_new = None, None
+#         while rho < rho_max:
+#             sol = sopt.minimize(_func, w_est, method='L-BFGS-B', jac=True, bounds=bnds)
+#             w_new = sol.x
+#             h_new, _ = _h(_adj(w_new))
+#             if h_new > 0.25 * h:
+#                 rho *= 10
+#             else:
+#                 break
+#         w_est, h = w_new, h_new
+#         alpha += rho * h
+#         if h <= h_tol or rho >= rho_max:
+#             break
+#     W_est = _adj(w_est)
+#     W_est[np.abs(W_est) < w_threshold] = 0
+#
+#     if leaf_nodes is not None:
+#         for u in leaf_nodes:
+#             W_est[u, :] = 0.0
+#
+#     return W_est

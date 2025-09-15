@@ -4,8 +4,10 @@ import numpy as np
 import warnings
 import itertools
 import pandas as pd
+import pydot
 import graphviz
 from sklearn.model_selection import train_test_split
+from collections import OrderedDict
 
 
 
@@ -110,3 +112,90 @@ def min_sample_retention(df: pd.DataFrame,
                                  random_state=_random_state)
 
     return sample
+
+import numpy as np
+
+def dot_to_adj(dot_input, desired_order, use_edge_label=False):
+    """
+    change <class 'pydot.core.Dot'> to numpy.ndarray
+    Define：adj[i, j] = 1 represent j → i (column is parent，row is child)
+
+    parameters
+    ----
+    dot_graph : pydot.Dot
+    desired_order : list of ordered node names
+
+    return
+    ----
+    adj_matrix : np.ndarray
+    """
+
+    def _s(x):
+        if x is None: return None
+        x = str(x)
+        if (x.startswith('"') and x.endswith('"')) or (x.startswith("'") and x.endswith("'")):
+            return x[1:-1]
+        return x
+
+    dot = pydot.graph_from_dot_data(dot_input)[0] if isinstance(dot_input, str) else dot_input
+
+    name_to_label = OrderedDict()
+    for n in dot.get_nodes():
+        nm = _s(n.get_name())
+        if nm in ("graph", "node", "edge"):
+            continue
+        lb = n.get_attributes().get("label")
+        lb = _s(lb if lb is not None else n.get_label())
+        name_to_label.setdefault(nm, lb if lb not in (None, "") else nm)
+
+    edges = dot.get_edges()
+    for e in edges:
+        s = _s(e.get_source());
+        t = _s(e.get_destination())
+        if s not in (None, "graph", "node", "edge"): name_to_label.setdefault(s, s)
+        if t not in (None, "graph", "node", "edge"): name_to_label.setdefault(t, t)
+
+    detected_labels = [name_to_label[nm] for nm in name_to_label.keys()]
+    labels = list(desired_order) if desired_order else detected_labels
+    if desired_order:
+        missing = set(labels) - set(detected_labels)
+        if missing:
+            raise ValueError(f"Can not find labels: {missing}")
+
+    idx_by_label = {lb: i for i, lb in enumerate(labels)}
+    idx_by_name = {nm: idx_by_label[lb] for nm, lb in name_to_label.items() if lb in idx_by_label}
+
+    adj_matrix = np.zeros((len(labels), len(labels)), dtype=float)
+    for e in edges:
+        s = _s(e.get_source());
+        t = _s(e.get_destination())
+        if s in ("graph", "node", "edge") or t in ("graph", "node", "edge"):
+            continue
+        if s not in idx_by_name or t not in idx_by_name:
+            continue
+
+        attrs = {k: _s(v) for k, v in e.get_attributes().items()}
+        dir_attr = attrs.get("dir")  # forward/back/both/none/None
+        arrowhead = attrs.get("arrowhead")  # normal/none/None
+        arrowtail = attrs.get("arrowtail")  # normal/none/None
+
+        forward = (dir_attr in (None, "forward", "both")) and (arrowhead != "none")
+        reverse = (dir_attr in ("back", "both")) and (arrowtail != "none")
+
+        if use_edge_label:
+            w_attr = attrs.get("label")
+            try:
+                w = float(w_attr) if w_attr not in (None, "") else 1.0
+            except ValueError:
+                w = 1.0
+        else:
+            w = 1.0
+
+        parent = idx_by_name[s]
+        child = idx_by_name[t]
+        if forward:
+            adj_matrix[child, parent] = w
+        if reverse:
+            adj_matrix[parent, child] = w
+
+    return adj_matrix

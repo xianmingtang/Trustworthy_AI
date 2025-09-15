@@ -24,6 +24,7 @@ import numpy as np
 import scipy.linalg as slin
 import scipy.optimize as sopt
 from scipy.special import expit as sigmoid
+import networkx as nx
 
 def pc_algorithm(
         df: pd.DataFrame,
@@ -70,7 +71,15 @@ def fci_algorithm(
     )
     return g, edges
 
-def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
+def notears_linear(
+        X,
+        lambda1,
+        loss_type,
+        max_iter=500,
+        h_tol=1e-8,
+        rho_max=1e+16,
+        w_threshold=0.03
+):
     """
     solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
 
@@ -132,6 +141,29 @@ def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+1
     def _enforce_leafnode(W, u):
         W2 = W.copy()
         W2[:, u] = 0.0
+        # W2[u, :] = 0.0
+        return W2
+
+    def _project_to_dag(W, zero_tol=1e-12):
+        """Remove the smallest-|w| edge on a cycle, repeatedly, until DAG."""
+        W2 = W.copy()
+        W2[np.abs(W2) < max(zero_tol, 0.)] = 0.0
+        d_ = W2.shape[0]
+        G = nx.DiGraph(((j, i, {'w': W2[j, i]}) for j in range(d_) for i in range(d_) if i != j and W2[j, i] != 0.0))
+        try:
+            cycle = nx.find_cycle(G, orientation='original')
+        except nx.NetworkXNoCycle:
+            cycle = None
+
+        while cycle:
+            u, v = min(((u, v) for u, v, _ in cycle), key=lambda e: abs(W2[e[0], e[1]]))
+            W2[u, v] = 0.0
+            if G.has_edge(u, v):
+                G.remove_edge(u, v)
+            try:
+                cycle = nx.find_cycle(G, orientation='original')
+            except nx.NetworkXNoCycle:
+                break
         return W2
 
     n, d = X.shape
@@ -155,8 +187,13 @@ def notears_linear(X, lambda1, loss_type, max_iter=500, h_tol=1e-8, rho_max=1e+1
             break
     W_est = _adj(w_est)
     W_est[np.abs(W_est) < w_threshold] = 0
-    # W_est[7, :] = 0.0
     W_est = _enforce_leafnode(W_est, 7)
+
+    ensure_dag = True
+
+    if ensure_dag:
+        W_est = _project_to_dag(W_est, zero_tol=max(1e-12, 0.1 * w_threshold))
+
     return W_est
 
 
@@ -375,7 +412,7 @@ def better_mutation(v, order, gsts):
 
 # New NOTEARS Algorithm
 
-# def notears_linear(X, lambda1, loss_type, leaf_nodes, max_iter=500, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
+# def notears_linear(X, lambda1, loss_type, mask_l2, mask_logit, mask_pois, max_iter=500, h_tol=1e-8, rho_max=1e+16, w_threshold=0.3):
 #     """
 #     solve min_W L(W; X) + lambda1 ‖W‖_1 s.t. h(W) = 0 using augmented Lagrangian.
 #
@@ -391,23 +428,88 @@ def better_mutation(v, order, gsts):
 #     Returns:
 #         W_est (np.ndarray): [d, d] estimated DAG
 #     """
+#
+#     n, d = X.shape
+#     use_mixed = (mask_l2 is not None) or (mask_logit is not None) or (mask_pois is not None)
+#     if use_mixed:
+#         mask_l2 = np.zeros(d, bool) if mask_l2 is None else np.asarray(mask_l2, dtype=bool)
+#         mask_logit = np.zeros(d, bool) if mask_logit is None else np.asarray(mask_logit, dtype=bool)
+#         mask_pois = np.zeros(d, bool) if mask_pois is None else np.asarray(mask_pois, dtype=bool)
+#         assert mask_l2.size == mask_logit.size == mask_pois.size == d, "掩码长度必须等于列数 d"
+#         # 互斥
+#         assert not np.any(mask_l2 & mask_logit) and not np.any(mask_l2 & mask_pois) and not np.any(
+#             mask_logit & mask_pois), \
+#             "mask_l2/logit/pois 需两两互斥"
+#
+#     def _sigmoid(z):
+#         return 1.0 / (1.0 + np.exp(-z))
+#
 #     def _loss(W):
-#         """Evaluate value and gradient of loss."""
-#         M = X @ W
-#         if loss_type == 'l2':
-#             R = X - M
-#             loss = 0.5 / X.shape[0] * (R ** 2).sum()
-#             G_loss = - 1.0 / X.shape[0] * X.T @ R
-#         elif loss_type == 'logistic':
-#             loss = 1.0 / X.shape[0] * (np.logaddexp(0, M) - X * M).sum()
-#             G_loss = 1.0 / X.shape[0] * X.T @ (sigmoid(M) - X)
-#         elif loss_type == 'poisson':
-#             S = np.exp(M)
-#             loss = 1.0 / X.shape[0] * (S - X * M).sum()
-#             G_loss = 1.0 / X.shape[0] * X.T @ (S - X)
+#         M = X @ W  # n x d
+#         if use_mixed:
+#             loss = 0.0
+#             G_loss = np.zeros_like(W)  # d x d
+#
+#             # L2
+#             if mask_l2.any():
+#                 J = np.where(mask_l2)[0]
+#                 R = X[:, J] - M[:, J]  # n x |J|
+#                 loss += 0.5 / n * np.sum(R * R)
+#                 G_loss[:, J] += - (X.T @ R) / n  # d x |J|
+#
+#             # Logistic
+#             if mask_logit.any():
+#                 J = np.where(mask_logit)[0]
+#                 Mj = M[:, J];
+#                 Xj = X[:, J]
+#                 P = _sigmoid(Mj)
+#                 loss += np.sum(np.logaddexp(0.0, Mj) - Xj * Mj) / n
+#                 G_loss[:, J] += (X.T @ (P - Xj)) / n
+#
+#             # Poisson
+#             if mask_pois.any():
+#                 J = np.where(mask_pois)[0]
+#                 Mj = M[:, J];
+#                 Xj = X[:, J]
+#                 S = np.exp(Mj)
+#                 loss += np.sum(S - Xj * Mj) / n
+#                 G_loss[:, J] += (X.T @ (S - Xj)) / n
+#
+#             return loss, G_loss
+#
 #         else:
-#             raise ValueError('unknown loss type')
-#         return loss, G_loss
+#             if loss_type == 'l2':
+#                 R = X - M
+#                 loss = 0.5 / n * (R ** 2).sum()
+#                 G_loss = - (X.T @ R) / n
+#             elif loss_type == 'logistic':
+#                 loss = (np.logaddexp(0, M) - X * M).sum() / n
+#                 G_loss = (X.T @ (_sigmoid(M) - X)) / n
+#             elif loss_type == 'poisson':
+#                 S = np.exp(M)
+#                 loss = (S - X * M).sum() / n
+#                 G_loss = (X.T @ (S - X)) / n
+#             else:
+#                 raise ValueError("unknown loss type (or provide masks for mixed loss)")
+#             return loss, G_loss
+#
+#     # def _loss(W):
+#     #     """Evaluate value and gradient of loss."""
+#     #     M = X @ W
+#     #     if loss_type == 'l2':
+#     #         R = X - M
+#     #         loss = 0.5 / X.shape[0] * (R ** 2).sum()
+#     #         G_loss = - 1.0 / X.shape[0] * X.T @ R
+#     #     elif loss_type == 'logistic':
+#     #         loss = 1.0 / X.shape[0] * (np.logaddexp(0, M) - X * M).sum()
+#     #         G_loss = 1.0 / X.shape[0] * X.T @ (sigmoid(M) - X)
+#     #     elif loss_type == 'poisson':
+#     #         S = np.exp(M)
+#     #         loss = 1.0 / X.shape[0] * (S - X * M).sum()
+#     #         G_loss = 1.0 / X.shape[0] * X.T @ (S - X)
+#     #     else:
+#     #         raise ValueError('unknown loss type')
+#     #     return loss, G_loss
 #
 #     def _h(W):
 #         """Evaluate value and gradient of acyclicity constraint."""
@@ -434,25 +536,16 @@ def better_mutation(v, order, gsts):
 #         g_obj = np.concatenate((G_smooth + lambda1, - G_smooth + lambda1), axis=None)
 #         return obj, g_obj
 #
-#     n, d = X.shape
-#     if loss_type == 'l2':
-#         X = X - np.mean(X, axis=0, keepdims=True)
-#
-#     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)]
-#
-#     if leaf_nodes is not None:
-#         if isinstance(leaf_nodes, int):
-#             leaf_nodes = [leaf_nodes]
-#     #     for u in leaf_nodes:
-#     #         for j in range(d):
-#     #             if j == u:
-#     #                 continue
-#     #             idx = u * d + j
-#     #             bnds[idx] = (0, 0)
-#     #             bnds[d * d + idx] = (0, 0)
+#     def _enforce_leafnode(W, u):
+#         W2 = W.copy()
+#         W2[:, u] = 0.0
+#         # W2[u, :] = 0.0
+#         return W2
 #
 #     w_est, rho, alpha, h = np.zeros(2 * d * d), 1.0, 0.0, np.inf  # double w_est into (w_pos, w_neg)
-#
+#     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)]
+#     if loss_type == 'l2':
+#         X = X - np.mean(X, axis=0, keepdims=True)
 #     for _ in range(max_iter):
 #         w_new, h_new = None, None
 #         while rho < rho_max:
@@ -469,9 +562,5 @@ def better_mutation(v, order, gsts):
 #             break
 #     W_est = _adj(w_est)
 #     W_est[np.abs(W_est) < w_threshold] = 0
-#
-#     if leaf_nodes is not None:
-#         for u in leaf_nodes:
-#             W_est[u, :] = 0.0
-#
+#     W_est = _enforce_leafnode(W_est, 7)
 #     return W_est
